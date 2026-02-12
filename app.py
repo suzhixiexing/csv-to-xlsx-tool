@@ -4,12 +4,12 @@ import os
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
 
 # 确保上传目录存在
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # 允许的文件扩展名
 def allowed_file(filename):
@@ -45,7 +45,8 @@ def upload_file():
             df.to_excel(xlsx_filepath, index=False)
             
             # 清除临时CSV文件
-            os.remove(filepath)
+            if os.path.exists(filepath):
+                os.remove(filepath)
             
             # 提供下载链接
             return redirect(url_for('download_file', filename=xlsx_filename))
@@ -53,6 +54,8 @@ def upload_file():
             # 清除临时文件
             if os.path.exists(filepath):
                 os.remove(filepath)
+            if os.path.exists(xlsx_filepath):
+                os.remove(xlsx_filepath)
             return f"转换失败: {str(e)}"
     else:
         return "只允许上传CSV文件"
@@ -62,7 +65,8 @@ def download_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     if os.path.exists(filepath):
         # 发送文件后删除
-        return send_file(filepath, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response = send_file(filepath, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return response
     else:
         return "文件不存在"
 
