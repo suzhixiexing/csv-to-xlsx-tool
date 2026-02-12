@@ -1,7 +1,8 @@
 from flask import Flask, request, render_template, send_file, redirect, url_for
-import pandas as pd
+import csv
 import os
 from werkzeug.utils import secure_filename
+import xlsxwriter
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
@@ -39,10 +40,21 @@ def upload_file():
         xlsx_filepath = os.path.join(app.config['UPLOAD_FOLDER'], xlsx_filename)
         
         try:
-            # 读取CSV文件
-            df = pd.read_csv(filepath)
-            # 写入XLSX文件
-            df.to_excel(xlsx_filepath, index=False)
+            # 使用纯Python处理CSV和生成XLSX
+            with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+                csv_reader = csv.reader(csvfile)
+                rows = list(csv_reader)
+            
+            # 创建XLSX文件
+            workbook = xlsxwriter.Workbook(xlsx_filepath)
+            worksheet = workbook.add_worksheet()
+            
+            # 写入数据
+            for row_num, row in enumerate(rows):
+                for col_num, value in enumerate(row):
+                    worksheet.write(row_num, col_num, value)
+            
+            workbook.close()
             
             # 清除临时CSV文件
             if os.path.exists(filepath):
