@@ -1,0 +1,70 @@
+from flask import Flask, request, render_template, send_file, redirect, url_for
+import pandas as pd
+import os
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
+
+# 确保上传目录存在
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
+
+# 允许的文件扩展名
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'csv'
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # 检查是否有文件部分
+    if 'file' not in request.files:
+        return redirect(request.url)
+    file = request.files['file']
+    # 检查文件是否为空
+    if file.filename == '':
+        return redirect(request.url)
+    # 检查文件是否为CSV
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # 转换CSV为XLSX
+        xlsx_filename = filename.rsplit('.', 1)[0] + '.xlsx'
+        xlsx_filepath = os.path.join(app.config['UPLOAD_FOLDER'], xlsx_filename)
+        
+        try:
+            # 读取CSV文件
+            df = pd.read_csv(filepath)
+            # 写入XLSX文件
+            df.to_excel(xlsx_filepath, index=False)
+            
+            # 清除临时CSV文件
+            os.remove(filepath)
+            
+            # 提供下载链接
+            return redirect(url_for('download_file', filename=xlsx_filename))
+        except Exception as e:
+            # 清除临时文件
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return f"转换失败: {str(e)}"
+    else:
+        return "只允许上传CSV文件"
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(filepath):
+        # 发送文件后删除
+        return send_file(filepath, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        return "文件不存在"
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
